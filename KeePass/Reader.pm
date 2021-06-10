@@ -61,10 +61,10 @@ sub read_database {
     }
 
     return if ($self->keepass4_read_header_fields());
-    #if (m_masterSeed.isEmpty() || m_encryptionIV.isEmpty() || db->cipher().isNull()) {
-    #    raiseError(tr("missing database headers"));
-    #    return false;
-    #}
+    if (!defined($self->{m_master_seed}) || !defined($self->{m_encryption_iv}) || !defined($self->{cipher_mode})) {
+        $self->error(message => 'missing database headers');
+        return ;
+    }
 
     print "===ici==\n";
 }
@@ -148,9 +148,28 @@ sub keepass_set_kdf {
     return 0;
 }
 
+sub keepass_set_compression_flags {
+    my ($self, %options) = @_;
+
+    if (length($options{field_data}) != 4) {
+        $self->error(message => 'Invalid compression flags length');
+        return 1;
+    }
+
+    my $id = unpack('V', $options{field_data});
+    if ($id > CompressionAlgorithmMax) {
+        $self->error(message => 'Unsupported compression algorithm');
+        return 1;
+    }
+
+    $self->{compression_algorithm} = $id;
+    return 0;
+}
+
 sub keepass4_read_header_fields {
     my ($self, %options) = @_;
 
+    $self->{compression_algorithm} = CompressionNone;
     $self->{header_comment} = undef;
     $self->{m_encryption_iv} = undef;
     $self->{m_master_seed} = undef;
@@ -179,7 +198,7 @@ sub keepass4_read_header_fields {
         } elsif ($field_id == KeePass2_HeaderFieldID_CipherID) {
             return 1 if ($self->keepass_set_chipher_id(field_data => $field_data));
         } elsif ($field_id == KeePass2_HeaderFieldID_CompressionFlags) {
-
+            return 1 if ($self->keepass_set_compression_flags(field_data => $field_data));
         } elsif ($field_id == KeePass2_HeaderFieldID_EncryptionIV) {
              $self->{m_encryption_iv} = $field_data;
         } elsif ($field_id == KeePass2_HeaderFieldID_MasterSeed) {

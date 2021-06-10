@@ -78,7 +78,11 @@ BEGIN {
         KdfParam_Argon2_Assocdata => 'A',
 
         Kdf_Min_Seed_Size => 8,
-        Kdf_Max_Seed_Size => 32
+        Kdf_Max_Seed_Size => 32,
+
+        CompressionNone => 0,
+        CompressionGZip => 1,
+        CompressionAlgorithmMax => 1,
     );
 }
 
