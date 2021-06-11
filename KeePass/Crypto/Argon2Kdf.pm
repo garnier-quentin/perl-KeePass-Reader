@@ -1,9 +1,10 @@
-package KeePass::Argon2Kdf;
+package KeePass::Crypto::Argon2Kdf;
 
 use strict;
 use warnings;
 use POSIX;
 use KeePass::constants qw(:all);
+use Crypt::Argon2;
 
 sub new {
     my ($class, %options) = @_;
@@ -11,7 +12,7 @@ sub new {
     bless $self, $class;
 
     $self->{type} = KeePass2_Kdf_Argon2Id;
-    if ($self->{type} eq KeePass2_Kdf_Argon2D) {
+    if ($options{type} eq KeePass2_Kdf_Argon2D) {
         $self->{type} = KeePass2_Kdf_Argon2D;
     }
     $self->{m_version} = 0x13;
@@ -20,6 +21,12 @@ sub new {
     $self->{m_rounds} = 10;
 
     return $self;
+}
+
+sub seed {
+    my ($self, %options) = @_;
+
+    return $self->{m_seed};
 }
 
 sub process_parameters {
@@ -53,6 +60,33 @@ sub process_parameters {
     }
     
     return 0;
+}
+
+sub transform {
+    my ($self, %options) = @_;
+
+    my $transform_key;
+    if ($self->{type} eq KeePass2_Kdf_Argon2D) {
+        $transform_key = Crypt::Argon2::argon2d_raw(
+            $options{raw_key},
+            $self->{m_seed},
+            $self->{m_rounds},
+            $self->{m_memory} . 'k',
+            $self->{m_parallelism},
+            32
+        );
+    } else {
+        $transform_key = Crypt::Argon2::argon2i_raw(
+            $options{raw_key},
+            $self->{m_seed},
+            $self->{m_rounds},
+            $self->{m_memory} . 'k',
+            $self->{m_parallelism},
+            32
+        );
+    }
+
+    return $transform_key;
 }
 
 1;

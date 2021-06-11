@@ -3,16 +3,22 @@ package KeePass::Reader;
 use strict;
 use warnings;
 use KeePass::constants qw(:all);
+use POSIX;
 use Data::UUID;
+use Crypt::Digest::SHA256;
+use Crypt::Digest::SHA512;
+use Crypt::Mac::HMAC;
 use Encode;
-use KeePass::Aes2Kdf;
-use KeePass::Argon2Kdf;
+use KeePass::Crypto::Aes2Kdf;
+use KeePass::Crypto::Argon2Kdf;
+use KeePass::Keys::Composite;
 
 sub new {
     my ($class, %options) = @_;
     my $self  = {};
     bless $self, $class;
 
+    $self->{composite} = KeePass::Keys::Composite->new();
     $self->{uuid} = Data::UUID->new();
     return $self;
 }
@@ -63,6 +69,48 @@ sub read_database {
     return if ($self->keepass4_read_header_fields());
     if (!defined($self->{m_master_seed}) || !defined($self->{m_encryption_iv}) || !defined($self->{cipher_mode})) {
         $self->error(message => 'missing database headers');
+        return ;
+    }
+
+    my $header_sha256 = unpack('@' . $self->{master_read_pos} . ' a32', $self->{buffer_file});
+    $self->{master_read_pos} += 32;
+    my $header_hmac = unpack('@' . $self->{master_read_pos} . ' a32', $self->{buffer_file});
+    $self->{master_read_pos} += 32;
+
+    if (length($header_sha256) != 32 || length($header_hmac) != 32) {
+        $self->error(message => 'Invalid header checksum size');
+        return ;
+    }
+    my $header_sha256_hex = unpack('H*', $header_sha256);
+    my $header_hmac_hex = unpack('H*', $header_hmac);
+    my $header_data = unpack('a' . ($self->{end_header_pos}), $self->{buffer_file});
+    my $header_data_sha256_hex = Crypt::Digest::SHA256::sha256_hex($header_data);
+
+    if ($header_data_sha256_hex ne $header_sha256_hex) {
+        $self->error(message => 'Header SHA256 mismatch');
+        return ;
+    }
+
+    my ($ret, $message) = $self->{composite}->add_key_password(password => $options{password});
+    if ($ret) {
+        $self->error(message => $message);
+        return ;
+    }
+    my $transformed_key = $self->{composite}->transform(kdf => $self->{kdf});
+
+    my $hmac_key = Crypt::Digest::SHA512::sha512(
+        pack('Q', 18446744073709551615) . Crypt::Digest::SHA512::sha512(
+            $self->{m_master_seed} . $transformed_key . pack('C', 0x01)
+        )
+    );
+
+    my $header_hmac_calc_hex = Crypt::Mac::HMAC::hmac_hex(
+        'SHA256',
+        $hmac_key,
+        $header_data
+    );
+    if ($header_hmac_hex ne $header_hmac_calc_hex) {
+        $self->error(message => 'Invalid credentials were provided or database file may be corrupt');
         return ;
     }
 
@@ -130,11 +178,11 @@ sub keepass_set_kdf {
     }
 
     if ($kdf_uuid eq KeePass2_Kdf_Aes_Kdbx4) {
-        $self->{kdf} = KeePass::Aes2Kdf->new();
+        $self->{kdf} = KeePass::Crypto::Aes2Kdf->new();
     } elsif ($kdf_uuid eq KeePass2_Kdf_Argon2D) {
-        $self->{kdf} = KeePass::Argon2Kdf->new(type => KeePass2_Kdf_Argon2D);
+        $self->{kdf} = KeePass::Crypto::Argon2Kdf->new(type => KeePass2_Kdf_Argon2D);
     } elsif ($kdf_uuid eq KeePass2_Kdf_Argon2Id) {
-        $self->{kdf} = KeePass::Argon2Kdf->new(type => KeePass2_Kdf_Argon2Id);
+        $self->{kdf} = KeePass::Crypto::Argon2Kdf->new(type => KeePass2_Kdf_Argon2Id);
     } else {
         $self->error(message => 'Unsupported key derivation function (KDF) or invalid parameters');
         return 1;
@@ -169,6 +217,8 @@ sub keepass_set_compression_flags {
 sub keepass4_read_header_fields {
     my ($self, %options) = @_;
 
+    $self->{start_header_pos} = $self->{master_read_pos};
+
     $self->{compression_algorithm} = CompressionNone;
     $self->{header_comment} = undef;
     $self->{m_encryption_iv} = undef;
@@ -185,14 +235,20 @@ sub keepass4_read_header_fields {
             return 1;
         }
         $self->{master_read_pos} += 5;
-        my $field_data = unpack('@' . $self->{master_read_pos} . ' a' . $field_len, $self->{buffer_file});
-        if (!defined($field_data) || length($field_data) != $field_len) {
-            $self->error(message => "Invalid header data length");
-            return 1;
+        
+        my $field_data;
+        if ($field_len > 0) {
+            $field_data = unpack('@' . $self->{master_read_pos} . ' a' . $field_len, $self->{buffer_file});
+            if (!defined($field_data) || length($field_data) != $field_len) {
+                $self->error(message => "Invalid header data length");
+                return 1;
+            }
+
+            $self->{master_read_pos} += $field_len;
         }
 
         if ($field_id == KeePass2_HeaderFieldID_EndOfHeader) {
-            return 0;
+            last;
         } elsif ($field_id == KeePass2_HeaderFieldID_Comment) {
             
         } elsif ($field_id == KeePass2_HeaderFieldID_CipherID) {
@@ -222,9 +278,10 @@ sub keepass4_read_header_fields {
             return 1; 
         }
 
-        $self->{master_read_pos} += length($field_data);
+        
     }
 
+    $self->{end_header_pos} = $self->{master_read_pos};
     return 0;
 }
 

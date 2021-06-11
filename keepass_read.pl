@@ -8,5 +8,8 @@ use KeePass::Reader;
 
 my $keepass = KeePass::Reader->new();
 $keepass->load_db(file => './files/testv4.kdbx', password => 'centreon');
-print $keepass->error() . "==\n";
+my $error = $keepass->error();
+if (defined($error)) {
+    print "error: $error\n";
+}
 exit(0);

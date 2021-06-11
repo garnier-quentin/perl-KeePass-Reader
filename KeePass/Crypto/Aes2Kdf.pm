@@ -1,4 +1,4 @@
-package KeePass::Aes2Kdf;
+package KeePass::Crypto::Aes2Kdf;
 
 use strict;
 use warnings;
@@ -11,6 +11,12 @@ sub new {
     bless $self, $class;
 
     return $self;
+}
+
+sub seed {
+    my ($self, %options) = @_;
+
+    return $self->{m_seed};
 }
 
 sub process_parameters {
