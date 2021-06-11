@@ -50,6 +50,7 @@ sub load_db {
 sub read_database {
     my ($self, %options) = @_;
 
+    my ($ret, $message);
     return if ($self->read_magic_numbers());
 
     if ($self->{sig1} == KeePass1_Signature_1 && $self->{sig2} == KeePass1_Signature_2) {
@@ -91,17 +92,18 @@ sub read_database {
         return ;
     }
 
-    my ($ret, $message) = $self->{composite}->add_key_password(password => $options{password});
+    ($ret, $message) = $self->{composite}->add_key_password(password => $options{password});
     if ($ret) {
         $self->error(message => $message);
         return ;
     }
     my $transformed_key = $self->{composite}->transform(kdf => $self->{kdf});
+    $self->{hmac_key} = Crypt::Digest::SHA512::sha512(
+        $self->{m_master_seed} . $transformed_key . pack('C', 0x01)
+    );
 
     my $hmac_key = Crypt::Digest::SHA512::sha512(
-        pack('Q', 18446744073709551615) . Crypt::Digest::SHA512::sha512(
-            $self->{m_master_seed} . $transformed_key . pack('C', 0x01)
-        )
+        pack('Q', 18446744073709551615) . $self->{hmac_key}
     );
 
     my $header_hmac_calc_hex = Crypt::Mac::HMAC::hmac_hex(
@@ -114,7 +116,49 @@ sub read_database {
         return ;
     }
 
-    print "===ici==\n";
+    $self->{master_key} = Crypt::Digest::SHA256::sha256(
+        $self->{m_master_seed} . $transformed_key
+    );
+
+    ($ret, $message) = $self->process_blocks();
+    if ($ret) {
+        $self->error(message => $message);
+        return ;
+    }
+}
+
+sub process_blocks {
+    my ($self, %options) = @_;
+
+    my $pos = $self->{master_read_pos};
+    my $payload_data = '';
+    while (1) {
+        my $block_hmac_hash_hex = unpack('H*', unpack('@' . $pos . ' a32', $self->{buffer_file}));
+        $pos += 32;
+        my $block_size = unpack('@' . $pos . ' I<', $self->{buffer_file});
+        $pos += 4;
+        if ($block_size == 0) {
+            last;
+        }
+
+        my $block_data = unpack('@' . $pos . ' a' . $block_size, $self->{buffer_file});
+        $pos += $block_size;
+
+        my $computed_hmac_hash_hex = Crypt::Mac::HMAC::hmac_hex(
+            'SHA256',
+            Crypt::Digest::SHA512::sha512(
+                pack('Q<', 0) . $self->{hmac_key}
+            ),
+            pack('Q<', 0) . pack('I<', $block_size) . $block_data
+        );
+        if ($computed_hmac_hash_hex ne $block_hmac_hash_hex) {
+            return (1, 'Payload verification failed');
+        }
+
+        $payload_data .= $block_data;
+    }
+
+    return (0);
 }
 
 sub read_magic_numbers {
