@@ -7,7 +7,13 @@ use POSIX;
 use Data::UUID;
 use Crypt::Digest::SHA256;
 use Crypt::Digest::SHA512;
+use Crypt::Stream::ChaCha;
+use Crypt::Stream::Salsa20;
 use Crypt::Mac::HMAC;
+use Crypt::Mode::CBC;
+use XML::LibXML::Simple;
+use MIME::Base64;
+use IO::Uncompress::Gunzip;
 use Encode;
 use KeePass::Crypto::Aes2Kdf;
 use KeePass::Crypto::Argon2Kdf;
@@ -43,7 +49,6 @@ sub load_db {
     $self->{buffer_file} = $self->slurp(file => $options{file});
     return if (!defined($self->{buffer_file}));
 
-    # there is also the composite key to manage
     return $self->read_database(password => $options{password});
 }
 
@@ -120,11 +125,82 @@ sub read_database {
         $self->{m_master_seed} . $transformed_key
     );
 
-    ($ret, $message) = $self->process_blocks();
-    if ($ret) {
-        $self->error(message => $message);
-        return ;
+    return if ($self->process_blocks());
+
+    return if ($self->load_xml());
+
+    $self->unlock_passwords();
+    return $self->{xml};
+}
+
+sub load_xml {
+    my ($self, %options) = @_;
+
+    $self->{xml} = undef;
+    eval {
+        $SIG{__WARN__} = sub {};
+        $self->{xml} = XMLin(
+            $self->{xml_data},
+            ForceArray => ['Group', 'Entry'],
+            KeyAttr => []
+        );
+    };
+    if ($@) {
+        $self->error(message => 'Cannot decode xml response: $@');
+        return 1;
     }
+
+    return 0;
+}
+
+sub browse_groups {
+    my ($self, %options) = @_;
+
+    return if (!defined($options{group_node}));
+
+    for (my $i = 0; $i < scalar(@{$options{group_node}}); $i++) {
+        if (defined($options{group_node}->[$i]->{Entry})) {
+            for (my $j = 0; $j < scalar(@{$options{group_node}->[$i]->{Entry}}); $j++) {
+                for (my $k = 0; $k < scalar(@{$options{group_node}->[$i]->{Entry}->[$j]->{String}}); $k++) {
+                    if ($options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Key} eq 'Password' && 
+                        defined($options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Value}->{content}) &&
+                        $options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Value}->{Protected} =~ /true/i
+                        ) {
+                        $options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Value}->{content} = 
+                            $self->unlock_password(password => $options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Value}->{content});
+                    }
+                }
+            }
+        }
+
+        $self->browse_groups(group_node => $options{group_node}->[$i]->{Group});
+    }
+}
+
+sub unlock_password {
+    my ($self, %options) = @_;
+
+    my $password = $options{password};
+    if ($self->{m_irs_algo} == ProtectedStreamAlgo_ChaCha20) {
+        my $key_iv = Crypt::Digest::SHA512::sha512($self->{m_protected_stream_key});
+        my $stream = Crypt::Stream::ChaCha->new(
+            unpack('a32', $key_iv), unpack('@32 a12', $key_iv)
+        );
+        $password = $stream->crypt(MIME::Base64::decode($password));
+    } elsif ($self->{m_irs_algo} == ProtectedStreamAlgo_Salsa20) {
+        my $stream = Crypt::Stream::Salsa20->new(
+            Crypt::Digest::SHA256::sha256($self->{m_protected_stream_key}), Inner_Stream_Salsa20_Iv
+        );
+        $password = $stream->crypt(MIME::Base64::decode($password));
+    }
+
+    return $password;
+}
+
+sub unlock_passwords {
+    my ($self, %options) = @_;
+
+    $self->browse_groups(group_node => $self->{xml}->{Root}->{Group});
 }
 
 sub process_blocks {
@@ -152,13 +228,32 @@ sub process_blocks {
             pack('Q<', 0) . pack('I<', $block_size) . $block_data
         );
         if ($computed_hmac_hash_hex ne $block_hmac_hash_hex) {
-            return (1, 'Payload verification failed');
+            $self->error(message => 'Payload verification failed');
+            return 1;
         }
 
         $payload_data .= $block_data;
     }
 
-    return (0);
+    if ($self->{cipher_mode} == Aes128_CBC || $self->{cipher_mode} == Aes256_CBC) {
+        my $cbc = Crypt::Mode::CBC->new('AES');
+        $payload_data = $cbc->decrypt($payload_data, $self->{master_key}, $self->{m_encryption_iv});
+    } elsif ($self->{cipher_mode} == ChaCha20) {
+        my $stream = Crypt::Stream::ChaCha->new($self->{master_key}, $self->{m_encryption_iv});
+        $payload_data = $stream->crypt($payload_data);
+    } elsif ($self->{cipher_mode} == Twofish_CBC) {
+        my $cbc = Crypt::Mode::CBC->new('Twofish');
+        $payload_data = $cbc->decrypt($payload_data, $self->{master_key}, $self->{m_encryption_iv});
+    }
+
+    if ($self->{compression_algorithm} == CompressionGZip) {
+        my $uncompress;
+        IO::Uncompress::Gunzip::gunzip(\$payload_data, \$uncompress);
+        $payload_data = $uncompress;
+    }
+
+    my $code = $self->keepass4_read_inner_fields(payload_data => $payload_data);
+    return $code;
 }
 
 sub read_magic_numbers {
@@ -199,7 +294,7 @@ sub keepass_set_chipher_id {
     }
 
     if (!defined($self->{cipher_mode})) {
-        $self->error(message => "Unsupported cipher");
+        $self->error(message => 'Unsupported cipher');
         return 1;
     }
 
@@ -255,6 +350,66 @@ sub keepass_set_compression_flags {
     }
 
     $self->{compression_algorithm} = $id;
+    return 0;
+}
+
+sub keepass4_read_inner_fields {
+    my ($self, %options) = @_;
+
+    $self->{xml_data} = undef;
+    $self->{m_protected_stream_key} = undef;
+    $self->{m_irs_algo} = undef;
+
+    my $pos = 0;
+    while (1) {
+        my ($field_id, $field_len) = unpack('@' . $pos . ' CV', $options{payload_data});
+        if (!defined($field_id)) {
+            $self->error(message => 'Invalid inner header id size');
+            return 1;
+        }
+        if (!defined($field_len)) {
+            $self->error(message => 'Invalid inner header field length');
+            return 1;
+        }
+        $pos += 5;
+        
+        my $field_data;
+        if ($field_len > 0) {
+            $field_data = unpack('@' . $pos . ' a' . $field_len, $options{payload_data});
+            if (!defined($field_data) || length($field_data) != $field_len) {
+                $self->error(message => "Invalid inner header data length");
+                return 1;
+            }
+
+            $pos += $field_len;
+        }
+
+        if ($field_id == KeePass2_InnerHeaderFieldID_End) {
+            last;
+        } elsif ($field_id == KeePass2_InnerHeaderFieldID_InnerRandomStreamID) {
+            if (length($field_data) != 4) {
+                $self->error(message => 'Invalid random stream id size');
+                return 1;
+            }
+            my $field_data = unpack('V', $field_data);
+            if ($field_data != ProtectedStreamAlgo_Salsa20 && $field_data != ProtectedStreamAlgo_ChaCha20) {
+                $self->error(message => 'Invalid inner random stream cipher');
+                return 1;
+            }
+            $self->{m_irs_algo} = $field_data;
+        } elsif ($field_id == KeePass2_InnerHeaderFieldID_InnerRandomStreamKey) {
+            $self->{m_protected_stream_key} = $field_data;
+        } elsif ($field_id == KeePass2_InnerHeaderFieldID_Binary) {
+            if ($field_len < 1) {
+                $self->error(message => 'Invalid inner header binary size');
+                return 1;
+            }
+            
+            # not supported binary attachment
+        }
+    }
+
+    $self->{xml_data} = unpack('@' . $pos . ' a*', $options{payload_data});
     return 0;
 }
 

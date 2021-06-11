@@ -31,6 +31,11 @@ BEGIN {
         KeePass2_HeaderFieldID_KdfParameters => 11,
         KeePass2_HeaderFieldID_PublicCustomData => 12,
 
+        KeePass2_InnerHeaderFieldID_End => 0,
+        KeePass2_InnerHeaderFieldID_InnerRandomStreamID => 1,
+        KeePass2_InnerHeaderFieldID_InnerRandomStreamKey => 2,
+        KeePass2_InnerHeaderFieldID_Binary => 3,
+
         Uuid_Length => 16,
 
         KeePass2_Cipher_Aes128 => '61ab05a1-9464-41c3-8d74-3a563df8dd35',
@@ -83,6 +88,12 @@ BEGIN {
         CompressionNone => 0,
         CompressionGZip => 1,
         CompressionAlgorithmMax => 1,
+
+        ProtectedStreamAlgo_ArcFourVariant => 1,
+        ProtectedStreamAlgo_Salsa20 => 2,
+        ProtectedStreamAlgo_ChaCha20 => 3,
+
+        Inner_Stream_Salsa20_Iv => 0xe8 . 0x30 . 0x09 . 0x4b . 0x97 . 0x20 . 0x5d . 0x2a
     );
 }
 
