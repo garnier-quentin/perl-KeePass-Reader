@@ -316,13 +316,12 @@ sub keepass_set_kdf {
         $kdf_uuid = KeePass2_Kdf_Aes_Kdbx4;
     }
 
-    if ($kdf_uuid eq KeePass2_Kdf_Aes_Kdbx4) {
-        $self->{kdf} = KeePass::Crypto::Aes2Kdf->new();
-    } elsif ($kdf_uuid eq KeePass2_Kdf_Argon2D) {
+    if ($kdf_uuid eq KeePass2_Kdf_Argon2D) {
         $self->{kdf} = KeePass::Crypto::Argon2Kdf->new(type => KeePass2_Kdf_Argon2D);
     } elsif ($kdf_uuid eq KeePass2_Kdf_Argon2Id) {
         $self->{kdf} = KeePass::Crypto::Argon2Kdf->new(type => KeePass2_Kdf_Argon2Id);
     } else {
+        # KeePass2_Kdf_Aes_Kdbx4: we don't support it. please use Argon2
         $self->error(message => 'Unsupported key derivation function (KDF) or invalid parameters');
         return 1;
     }
