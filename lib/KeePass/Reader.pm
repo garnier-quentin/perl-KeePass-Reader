@@ -19,6 +19,8 @@ use KeePass::Crypto::Aes2Kdf;
 use KeePass::Crypto::Argon2Kdf;
 use KeePass::Keys::Composite;
 
+our $VERSION = '0.1';
+
 sub new {
     my ($class, %options) = @_;
     my $self  = {};
@@ -579,3 +581,75 @@ sub slurp {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+KeePass::Reader - Interface to KeePass V4 database files
+
+=head1 SYNOPSIS
+
+  #!/usr/bin/perl
+  
+  use strict;
+  use warnings;
+  use Data::Dumper;
+  use KeePass::Reader;
+  
+  my $keepass = KeePass::Reader->new();
+  my $content = $keepass->load_db(file => './files/test1.kdbx', password => 'test');
+  my $error = $keepass->error();
+  if (defined($error)) {
+    print "error: $error\n";
+  }
+  print Data::Dumper::Dumper($content);
+  
+  exit(0);
+
+=head1 DESCRIPTION
+
+C<KeePass::Reader> is a perl interface to read KeePass version 4.
+
+It supports following capabilities:
+- Encryption Algorithm: AES, TwoFish, ChaCha20 
+- Key Derivation Function: Argon2
+- Keys: Password, KeyFile
+
+=head1 METHODS
+
+=over 4
+
+=item new
+
+Create new object:
+
+    my $keepass = KeePass::Reader->new();
+
+=item load_db ([ OPTIONS ])
+
+Read a kdbx filename. Returns hash structure on success (otherwise undef).
+
+C<OPTIONS> are passed in a hash like fashion, using key and value pairs. Possible options are:
+
+B<file> - Set the kdbx filename to read.
+
+B<password> - Set the password credential.
+
+B<keyfile> - Set the key filename (optional).
+
+=item error ( )
+
+Returns the last error message. returns undef if no error.
+
+=back
+
+=head1 LICENSE
+
+This library is licensed under the Apache License 2.0. Details of this license can be found within the 'LICENSE' text file
+
+=head1 AUTHOR
+
+Quentin Garnier <qgarnier@centreon.com>
+
+=cut
