@@ -5,7 +5,7 @@ C<KeePass::Reader> is a perl interface to read KeePass version 4.
 It supports following capabilities:
 * Encryption Algorithm: AES, TwoFish, ChaCha20 
 * Key Derivation Function: Argon2
-* Keys: Password, KeyFile
+* Keys: Password, KeyFile (SHA-256 hash of the key file)
 
 It's still in working progress (but it's functional ;)
 

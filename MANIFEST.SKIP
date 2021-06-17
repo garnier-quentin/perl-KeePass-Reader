@@ -13,6 +13,7 @@
 
 # contrib
 ^contrib
+^files
 
 # packages
 ^packaging

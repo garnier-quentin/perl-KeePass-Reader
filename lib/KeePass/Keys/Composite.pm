@@ -28,7 +28,10 @@ sub add_key_password {
 sub add_key_file {
     my ($self, %options) = @_;
 
-    return (1, 'unsupported');
+    my $key_file = KeePass::Keys::File->new();
+    my ($ret, $message) = $key_file->set_keyfile(keyfile => $options{keyfile});
+    push @{$self->{keys}}, $key_file if ($ret == 0);
+    return ($ret, $message);
 }
 
 sub raw_key {

@@ -51,7 +51,7 @@ sub load_db {
     $self->{buffer_file} = $self->slurp(file => $options{file});
     return if (!defined($self->{buffer_file}));
 
-    return $self->read_database(password => $options{password});
+    return $self->read_database(password => $options{password}, keyfile => $options{keyfile});
 }
 
 sub read_database {
@@ -103,6 +103,13 @@ sub read_database {
     if ($ret) {
         $self->error(message => $message);
         return ;
+    }
+    if (defined($options{keyfile}) && $options{keyfile} ne '') {
+        ($ret, $message) = $self->{composite}->add_key_file(keyfile => $options{keyfile});
+        if ($ret) {
+            $self->error(message => $message);
+            return ;
+        }
     }
     my $transformed_key = $self->{composite}->transform(kdf => $self->{kdf});
     $self->{hmac_key} = Crypt::Digest::SHA512::sha512(
@@ -614,7 +621,7 @@ C<KeePass::Reader> is a perl interface to read KeePass version 4.
 It supports following capabilities:
 - Encryption Algorithm: AES, TwoFish, ChaCha20 
 - Key Derivation Function: Argon2
-- Keys: Password, KeyFile
+- Keys: Password, KeyFile (SHA-256 hash of the key file)
 
 =head1 METHODS
 

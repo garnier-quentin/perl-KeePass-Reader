@@ -16,5 +16,5 @@
     * encryption time: 100ms
 * test4.kdbx:
     * version 4
-    * password: centreon
+    * password: test
     * extra key file
