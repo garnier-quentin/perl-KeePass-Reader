@@ -37,7 +37,9 @@ sub set_keyfile {
     my ($self, %options) = @_;
 
     my ($ret, $message, $buffer) = $self->slurp(file => $options{keyfile});
-    $self->{m_key} = Crypt::Digest::SHA256::sha256($buffer);
+    if ($ret == 0) {
+        $self->{m_key} = Crypt::Digest::SHA256::sha256($buffer);
+    }
     return ($ret, $message);
 }
 
