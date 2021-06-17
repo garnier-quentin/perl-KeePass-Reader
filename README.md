@@ -30,6 +30,10 @@ To install KeePass::Reader type the following:
 # make install
 ```
 
+### SOURCES
+
+Knowledge about the algorithms necessary to decode a KeePass DB v4 format was gleaned from the source code of [keepassxc](https://github.com/keepassxreboot/keepassxc).
+
 ### BUGS/FEATURE REQUESTS
 
 Please report bugs and request features on the github : https://github.com/garnier-quentin/perl-KeePass-Reader
