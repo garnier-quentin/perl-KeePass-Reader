@@ -17,8 +17,8 @@ To install KeePass::Reader, you need following perl module:
 
 For the module execution, you need following perl module dependencies:
 
-* Crypt-Argon2: https://metacpan.org/pod/Crypt::Argon2
-* Cryptx: https://metacpan.org/pod/CryptX
+* [Crypt-Argon2](https://metacpan.org/pod/Crypt::Argon2)
+* [Cryptx](https://metacpan.org/pod/CryptX)
 
 ### INSTALLATION
 
