@@ -38,15 +38,15 @@ BEGIN {
 
         Uuid_Length => 16,
 
-        KeePass2_Cipher_Aes128 => '61ab05a1-9464-41c3-8d74-3a563df8dd35',
-        KeePass2_Cipher_Aes256 => '31c1f2e6-bf71-4350-be58-05216afc5aff',
-        KeePass2_Cipher_Twofish => 'ad68f29f-576f-4bb9-a36a-d47af965346c',
-        KeePass2_Cipher_Chacha20 => 'd6038a2b-8b6f-4cb5-a524-339a31dbb59a',
+        KeePass2_Cipher_Aes128 => '61ab05a1946441c38d743a563df8dd35',
+        KeePass2_Cipher_Aes256 => '31c1f2e6bf714350be5805216afc5aff',
+        KeePass2_Cipher_Twofish => 'ad68f29f576f4bb9a36ad47af965346c',
+        KeePass2_Cipher_Chacha20 => 'd6038a2b8b6f4cb5a524339a31dbb59a',
 
-        KeePass2_Kdf_Aes_Kdbx3 => 'c9d9f39a-628a-4460-bf74-0d08c18a4fea',
-        KeePass2_Kdf_Aes_Kdbx4 => '7c02bb82-79a7-4ac0-927d-114a00648238',
-        KeePass2_Kdf_Argon2D => 'ef636ddf-8c29-444b-91f7-a9a403e30a0c',
-        KeePass2_Kdf_Argon2Id => '9e298b19-56db-4773-b23d-fc3ec6f0a1e6',
+        KeePass2_Kdf_Aes_Kdbx3 => 'c9d9f39a628a4460bf740d08c18a4fea',
+        KeePass2_Kdf_Aes_Kdbx4 => '7c02bb8279a74ac0927d114a00648238',
+        KeePass2_Kdf_Argon2D => 'ef636ddf8c29444b91f7a9a403e30a0c',
+        KeePass2_Kdf_Argon2Id => '9e298b1956db4773b23dfc3ec6f0a1e6',
 
         Aes128_CBC => 1,
         Aes256_CBC => 2,

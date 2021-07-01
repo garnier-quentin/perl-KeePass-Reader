@@ -4,7 +4,6 @@ use strict;
 use warnings;
 use KeePass::constants qw(:all);
 use POSIX;
-use Data::UUID;
 use Crypt::Digest::SHA256;
 use Crypt::Digest::SHA512;
 use Crypt::Stream::ChaCha;
@@ -19,7 +18,7 @@ use KeePass::Crypto::Aes2Kdf;
 use KeePass::Crypto::Argon2Kdf;
 use KeePass::Keys::Composite;
 
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 sub new {
     my ($class, %options) = @_;
@@ -27,7 +26,6 @@ sub new {
     bless $self, $class;
 
     $self->{composite} = KeePass::Keys::Composite->new();
-    $self->{uuid} = Data::UUID->new();
     return $self;
 }
 
@@ -285,13 +283,8 @@ sub keepass_set_chipher_id {
         $self->error(message => "Invalid cipher uuid length:");
         return 1;
     }
-    
-    my $uuid = $self->{uuid}->to_string($options{field_data});
-    if (!defined($uuid)) {
-        $self->error(message => "Unable to parse UUID");
-        return 1;
-    }
 
+    my $uuid = unpack('H*', $options{field_data});
     if ($uuid eq KeePass2_Cipher_Aes128) {
         $self->{cipher_mode} = Aes128_CBC;
     } elsif ($uuid eq KeePass2_Cipher_Aes256) {
@@ -320,7 +313,8 @@ sub keepass_set_kdf {
         $self->error(message => 'Unsupported key derivation function (KDF) or invalid parameters');
         return 1;
     }
-    my $kdf_uuid = $self->{uuid}->to_string($map->{'$UUID'});
+
+    my $kdf_uuid = unpack('H*', $map->{'$UUID'});
     if ($kdf_uuid eq KeePass2_Kdf_Aes_Kdbx3) {
         $kdf_uuid = KeePass2_Kdf_Aes_Kdbx4;
     }

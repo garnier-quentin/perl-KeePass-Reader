@@ -1,7 +1,7 @@
 %define cpan_name KeePass-Reader
 
 Name:		perl-KeePass-Reader
-Version:	0.1
+Version:	0.2
 Release:	1%{?dist}
 Summary:	Interface to KeePass V4 database files
 Group:		Development/Libraries
