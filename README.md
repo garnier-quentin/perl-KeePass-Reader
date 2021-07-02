@@ -1,6 +1,6 @@
 # KeePass::Reader - Interface to KeePass V4 database files
 
-C<KeePass::Reader> is a perl interface to read KeePass version 4.
+KeePass::Reader is a perl interface to read KeePass version 4.
 
 It supports following capabilities:
 * Encryption Algorithm: AES, TwoFish, ChaCha20 
