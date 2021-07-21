@@ -43,7 +43,7 @@ sub load_db {
     my ($self, %options) = @_;
 
     $self->{error_msg} = undef; 
-    $self->{buffer_file} = undef; 
+    $self->{buffer_file} = undef;
     $self->{master_read_pos} = 0;
 
     $self->{buffer_file} = $self->slurp(file => $options{file});
@@ -187,18 +187,11 @@ sub browse_groups {
 sub unlock_password {
     my ($self, %options) = @_;
 
-    my $password = $options{password};
+    my $password;
     if ($self->{m_irs_algo} == ProtectedStreamAlgo_ChaCha20) {
-        my $key_iv = Crypt::Digest::SHA512::sha512($self->{m_protected_stream_key});
-        my $stream = Crypt::Stream::ChaCha->new(
-            unpack('a32', $key_iv), unpack('@32 a12', $key_iv)
-        );
-        $password = $stream->crypt(MIME::Base64::decode($password));
+        $password = $self->{stream_decrypt} ->crypt(MIME::Base64::decode($options{password}));
     } elsif ($self->{m_irs_algo} == ProtectedStreamAlgo_Salsa20) {
-        my $stream = Crypt::Stream::Salsa20->new(
-            Crypt::Digest::SHA256::sha256($self->{m_protected_stream_key}), Inner_Stream_Salsa20_Iv
-        );
-        $password = $stream->crypt(MIME::Base64::decode($password));
+        $password = $self->{stream_decrypt}->crypt(MIME::Base64::decode($options{password}));
     }
 
     return $password;
@@ -206,6 +199,17 @@ sub unlock_password {
 
 sub unlock_passwords {
     my ($self, %options) = @_;
+
+    if ($self->{m_irs_algo} == ProtectedStreamAlgo_ChaCha20) {
+        my $key_iv = Crypt::Digest::SHA512::sha512($self->{m_protected_stream_key});
+        $self->{stream_decrypt} = Crypt::Stream::ChaCha->new(
+            unpack('a32', $key_iv), unpack('@32 a12', $key_iv)
+        );
+    } elsif ($self->{m_irs_algo} == ProtectedStreamAlgo_Salsa20) {
+        $self->{stream_decrypt} = Crypt::Stream::Salsa20->new(
+            Crypt::Digest::SHA256::sha256($self->{m_protected_stream_key}), Inner_Stream_Salsa20_Iv
+        );
+    }
 
     $self->browse_groups(group_node => $self->{xml}->{Root}->{Group});
 }
