@@ -169,6 +169,9 @@ sub browse_groups {
         if (defined($options{group_node}->[$i]->{Entry})) {
             for (my $j = 0; $j < scalar(@{$options{group_node}->[$i]->{Entry}}); $j++) {
                 for (my $k = 0; $k < scalar(@{$options{group_node}->[$i]->{Entry}->[$j]->{String}}); $k++) {
+                    if ($options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Key} eq 'Title') {
+                        $options{group_node}->[$i]->{Entry}->[$j]->{Title} = $options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Value};
+                    }
                     if ($options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Key} eq 'Password' && 
                         defined($options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Value}->{content}) &&
                         $options{group_node}->[$i]->{Entry}->[$j]->{String}->[$k]->{Value}->{Protected} =~ /true/i
